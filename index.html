@@ -1,9 +1,9 @@
-<!DOCTYPE html>  <html lang="ar" dir="rtl">  
+here<!DOCTYPE html>  <html lang="ar" dir="rtl">  
 <head>  
     <meta charset="UTF-8">  
     <meta name="viewport" content="width=device-width, initial-scale=1.0">     
     <meta name="description" content="ثانوية الشهيد رمضاني محمد بفرومة - صرح تعليمي متميز يقدم محتوى تربوي وتعليمي للطلبة"> 
-        <meta name="keywords" content="،مدرسة رمضاني, ثانوية رمضاني محمد, فرومة, تعليم, الجزائر, Ramdani School، ڨرومة،، أخبار قرومة، ثانوية ڨرومة،> 
+    <meta name="keywords" content="،مدرسة رمضاني, ثانوية رمضاني محمد, فرومة, تعليم, الجزائر, Ramdani School، ڨرومة،، أخبار قرومة، ثانوية ڨرومة"> 
     <title>ثانوية الشهيد رمضاني محمد - قرومة</title>  
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;500;700;800&display=swap" rel="stylesheet">  
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">  <script src="https://www.google.com/recaptcha/api.js" async defer></script>  
@@ -226,7 +226,7 @@
             <textarea id="pContent" rows="3" placeholder="تفاصيل الإعلان..."></textarea>  
         </div>  
         <div class="input-group">  
-            <label>📸 اختر صورة:</label>  
+            <label>📸 اختر صورة (الأقصى 2MB):</label>  
             <input type="file" id="pImgFile" accept="image/*">  
         </div>  
 
@@ -345,8 +345,7 @@
 </div>
 <div> <footer>  
     <p>© 2026 ثانوية الشهيد رمضاني محمد - بلدية قرومة</p>  
-    <p>برمجة وتطوير: <b>فؤاد قبلاجي</b></p>
-    <p> تنبيه هذه نسخة تجريبية </p>
+    <p>برمجة وتطوير: <b>فؤاد قبلاجي</b></p>  
 </footer>  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>  <script>  
     const firebaseConfig = {  
       apiKey: "AIzaSyC2pCToSUJS4jUdoaDWcUFbtZ2SwTE7NCE",  
@@ -369,7 +368,6 @@
         document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));  
         document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));  
         document.getElementById(id).classList.add('active');  
-        // نستخدم طريقة بديلة لتحديد الزر النشط لضمان التوافق  
         const navButtons = document.querySelectorAll('nav button');  
         navButtons.forEach(btn => {  
             if(btn.getAttribute('onclick').includes(id)) btn.classList.add('active');  
@@ -389,14 +387,27 @@
         const pass = document.getElementById('userPass').value;  
         const name = document.getElementById('userName').value;  
         if(!email || !pass) { alert("أدخل البيانات كاملة"); return; }  
+        
+        // منع انتحال صفة الإدارة
+        const forbiddenNames = ["إدارة", "ادارة", "مسؤول", "مسؤل", "admin", "مدير"];
+        if(isSignUp && forbiddenNames.some(n => name.toLowerCase().includes(n))) {
+            alert("لا يمكن استخدام هذا الاسم، يرجى اختيار اسمك الحقيقي");
+            return;
+        }
   
         try {  
             if (isSignUp) {  
                 const res = await auth.createUserWithEmailAndPassword(email, pass);  
-                await res.user.updateProfile({ displayName: name });  
-                alert("مرحباً بك في أسرة الناشرين!");  
+                await res.user.updateProfile({ displayName: name });
+                // تفعيل التحقق من البريد
+                await res.user.sendEmailVerification();
+                alert("تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني لتفعيل الحساب.");  
             } else {  
-                await auth.signInWithEmailAndPassword(email, pass);  
+                const res = await auth.signInWithEmailAndPassword(email, pass);
+                if(!res.user.emailVerified) {
+                    alert("يرجى تفعيل حسابك من خلال الرابط المرسل لبريدك أولاً.");
+                    // auth.signOut(); return; // اختياري: منع الدخول تماماً إلا بالتحقق
+                }
             }  
             showSection('home');  
         } catch (e) { alert("خطأ: " + e.message); }  
@@ -435,7 +446,13 @@
         const captchaResponse = grecaptcha.getResponse();  
         if (captchaResponse.length == 0) { alert("يرجى إكمال التحقق البشري"); return; }  
   
-        if(!title || !text) { alert("أدخل العنوان والمحتوى"); return; }  
+        if(!title || !text) { alert("أدخل العنوان والمحتوى"); return; }
+        
+        // حماية مساحة التخزين - حد 2 ميجا
+        if(file && file.size > 2 * 1024 * 1024) {
+            alert("حجم الصورة كبير جداً! الحد الأقصى هو 2 ميجابايت.");
+            return;
+        }
   
         btn.disabled = true;  
         status.innerText = "جاري النشر...";  
@@ -465,21 +482,43 @@
         });  
     }  
   
-    db.ref("posts").on("child_added", (snap) => {  
-        const p = snap.val();  
+    // تعديل لضمان عدم اختفاء المنشورات
+    db.ref("posts").on("value", (snapshot) => {
+        document.getElementById('feed').innerHTML = "";
+        snapshot.forEach((childSnapshot) => {
+            const p = childSnapshot.val();
+            const key = childSnapshot.key;
+            renderPost(p, key);
+        });
+    });
+
+    function renderPost(p, key) {
         let imgHtml = p.img ? `<img src="${p.img}">` : '';  
         const html = `  
-            <div class="announcement">  
+            <div class="announcement ${p.pinned?'pin':''}" id="post-${key}">  
                 ${imgHtml}  
                 <div class="announcement-content">  
                     <h3>${p.title}</h3>  
                     <p>${p.text}</p>  
-                    <div class="meta">🕒 ${p.date} | ✍️ الناشر: ${p.publisher || 'إدارة الثانوية'}</div>  
+                    <div class="meta">🕒 ${p.date} | ✍️ الناشر: ${p.publisher || 'إدارة الثانوية'}</div>
+                    <div class="reactions">  
+                         <button class="like-btn" onclick="likePost('${key}',this)">❤️ ${(p.likes?Object.keys(p.likes).length:0)}</button>  
+                         <div class="comment-box">  
+                           <input type="text" placeholder="أضف تعليق..." id="c-${key}">  
+                           <button onclick="addComment('${key}')">إرسال</button>  
+                           <div id="comments-${key}"></div>  
+                         </div>  
+                         <div class="admin-tools">  
+                           <button onclick="adminAction('pin','${key}')">📌</button>  
+                           <button onclick="adminAction('delete','${key}')">🗑️</button>  
+                         </div>  
+                    </div>
                 </div>  
             </div>  
         `;  
-        document.getElementById('feed').insertAdjacentHTML('afterbegin', html);  
-    });  
+        document.getElementById('feed').insertAdjacentHTML('afterbegin', html);
+        loadComments(key);
+    }
 </script>  </body>  
 </html>  <style>  
 .reactions{margin-top:15px;border-top:1px solid #eee;padding-top:10px}  
@@ -493,7 +532,8 @@
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#2c3e50;color:#fff;padding:12px 18px;border-radius:10px;z-index:9999;opacity:0;transition:.3s}  
 .toast.show{opacity:1}  
 </style>  <div id="toast" class="toast"></div>  <script>  
-const ADMIN_PASSWORD="fouad2009prosuper"; // غيرها  
+// تم تشفير كلمة السر بشكل بسيط لمنع استخراجها بمجرد النظر للكود
+const _0xADMIN = "Zm91YWQyMDA5cHJvc3VwZXI="; 
   
 function showToast(msg){  
  const t=document.getElementById("toast");  
@@ -511,43 +551,6 @@ handleAuth=async function(){
  if(pass.length<6){showToast("كلمة المرور يجب أن تكون 6 على الأقل");return;}  
  oldHandleAuth();  
 }  
-  
-/* تعديل عرض المنشورات لإضافة التفاعلات */  
-db.ref("posts").off("child_added");  
-db.ref("posts").on("child_added",(snap)=>{  
- const p=snap.val();  
- const key=snap.key;  
- let imgHtml=p.img?`<img src="${p.img}">`:'';  
-  
- const html=`  
- <div class="announcement ${p.pinned?'pin':''}" id="post-${key}">  
-  ${imgHtml}  
-  <div class="announcement-content">  
-   <h3>${p.title}</h3>  
-   <p>${p.text}</p>  
-   <div class="meta">🕒 ${p.date} | ✍️ ${p.publisher||'إدارة الثانوية'}</div>  
-  
-   <div class="reactions">  
-     <button class="like-btn" onclick="likePost('${key}',this)">❤️ ${(p.likes?Object.keys(p.likes).length:0)}</button>  
-  
-     <div class="comment-box">  
-       <input type="text" placeholder="أضف تعليق..." id="c-${key}">  
-       <button onclick="addComment('${key}')">إرسال</button>  
-       <div id="comments-${key}"></div>  
-     </div>  
-  
-     <div class="admin-tools">  
-       <button onclick="adminAction('pin','${key}')">📌</button>  
-       <button onclick="adminAction('delete','${key}')">🗑️</button>  
-     </div>  
-   </div>  
-  
-  </div>  
- </div>  
- `;  
- document.getElementById('feed').insertAdjacentHTML('afterbegin',html);  
- loadComments(key);  
-});  
   
 /* إعجاب مرة واحدة */  
 function likePost(postId,btn){  
@@ -606,7 +609,7 @@ function loadComments(postId){
 /* أدوات المشرف */  
 function adminAction(type,postId){  
  const pass=prompt("أدخل كلمة السر");  
- if(pass!==ADMIN_PASSWORD){showToast("كلمة سر خاطئة");return;}  
+ if(btoa(pass)!==_0xADMIN){showToast("كلمة سر خاطئة");return;}  
   
  if(type==="delete"){  
   db.ref("posts/"+postId).remove();  
@@ -621,7 +624,7 @@ function adminAction(type,postId){
   
 function adminDeleteComment(postId,cid){  
  const pass=prompt("كلمة السر");  
- if(pass!==ADMIN_PASSWORD){showToast("خطأ");return;}  
+ if(btoa(pass)!==_0xADMIN){showToast("خطأ");return;}  
  db.ref("posts/"+postId+"/comments/"+cid).remove();  
  loadComments(postId);  
 }  
@@ -667,4 +670,4 @@ html,body{overflow-x:hidden}
  .container{max-width:1100px}
  .card{padding:35px}
 }
-        </style>
+            </style>
